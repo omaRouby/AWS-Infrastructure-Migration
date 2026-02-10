@@ -32,7 +32,7 @@ Migrating the current AWS Lightsail infrastructure to a standard AWS EC2-based a
 - No NAT Gateway (cost-optimized design)
 
 ### Architecture Diagram
-<img width="1536" height="1024" alt="ChatGPT Image Feb 10, 2026, 06_51_21 AM" src="https://github.com/user-attachments/assets/0dd31b9b-35b4-4609-8718-785963683eb8" />
+<img width="622" height="388" alt="image" src="https://github.com/user-attachments/assets/0edcd37f-f21e-47a3-901c-2d7b12f5439a" />
 
 ---
 
@@ -97,6 +97,17 @@ The final migration approach should be discussed with the application team based
 
 ---
 
+## Monitoring & Visibility
+- **Amazon CloudWatch** will be used for monitoring and observability
+- Metrics collected:
+  - EC2 CPU, memory, and disk utilization
+  - Application Load Balancer request count, latency, and error rates
+  - RDS MySQL performance metrics
+- CloudWatch alarms can be configured for:
+  - High CPU or memory usage
+  - Unhealthy load balancer targets
+  - Database performance thresholds
+- This provides visibility into system health without adding significant cost or operational complexity
 ## Security Improvements
 - No public EC2 instances
 - Centralized protection using AWS WAF
