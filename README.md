@@ -32,9 +32,7 @@ Migrating the current AWS Lightsail infrastructure to a standard AWS EC2-based a
 - No NAT Gateway (cost-optimized design)
 
 ### Architecture Diagram
-> Add the architecture image here
-
-![Uploading ChatGPT Image Feb 10, 2026, 06_51_21 AM.png…]()
+<img width="1536" height="1024" alt="ChatGPT Image Feb 10, 2026, 06_51_21 AM" src="https://github.com/user-attachments/assets/0dd31b9b-35b4-4609-8718-785963683eb8" />
 
 ---
 
