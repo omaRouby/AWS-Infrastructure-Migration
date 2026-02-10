@@ -6,7 +6,7 @@
 ---
 
 ## Objective
-I propose migrating the current AWS Lightsail infrastructure to a standard AWS EC2-based architecture in order to improve **security, availability, and scalability**, while keeping the overall solution **cost-effective and simple to operate**.
+Migrating the current AWS Lightsail infrastructure to a standard AWS EC2-based architecture in order to improve **security, availability, and scalability**, while keeping the overall solution **cost-effective and simple to operate**.
 
 ---
 
