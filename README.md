@@ -127,6 +127,9 @@ The final migration approach should be discussed with the application team based
 
 ## Estimated Monthly Cost (us-east-1)
 
+<img width="895" height="275" alt="image" src="https://github.com/user-attachments/assets/ed59543e-c5bc-432e-ac41-5418d2cb3a8b" />
+
+
 | Service | Approximate Cost |
 |------|----------------|
 | EC2 (4 × t3.large) | ~$240 |
