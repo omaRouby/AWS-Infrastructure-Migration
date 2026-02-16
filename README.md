@@ -283,7 +283,7 @@ ALB: ~$30
 
 Estimated Total:
 
-≈ **$630 – $670 per month**
+≈ **$630 – $700 per month**
 
 (Final cost depends on RDS storage size, backup retention, and actual traffic volume.)
 
