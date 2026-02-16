@@ -1,149 +1,309 @@
 # AWS Infrastructure Migration Proposal
 
-## Target Region
-**US East (N. Virginia – `us-east-1`)**
+## Region
+
+**Frankfurt (eu-central-1)**
 
 ---
 
-## Objective
-Migrating the current AWS Lightsail infrastructure to a standard AWS EC2-based architecture in order to improve **security, availability, and scalability**, while keeping the overall solution **cost-effective and simple to operate**.
+# 1. Objective
+
+This proposal outlines the migration of the existing AWS Lightsail infrastructure to a redesigned AWS EC2-based architecture in Frankfurt.
+The goal is to improve:
+
+* Security
+* Operational visibility
+* Reliability
+* Performance capacity
+* Controlled cost structure
 
 ---
 
-## Current State
-- 2 AWS Lightsail Ubuntu instances with public IP addresses
-- 4 AWS Lightsail MySQL databases (production and development)
-- Application servers are directly exposed to the internet
-- Limited scalability and limited security controls
+# 2. Current Environment
+
+* 2 Lightsail Ubuntu instances (publicly exposed)
+* 4 Lightsail MySQL databases
+* Limited monitoring and security controls
+* No centralized traffic management
 
 ---
 
-## Target Architecture (After Migration)
+# 3. Target Architecture Overview
 
-### Overview
-- Single **VPC** in `us-east-1`
-- **Public Subnets**
-  - Application Load Balancers (one per application)
-- **Private Subnets**
-  - EC2 Auto Scaling Groups (no public IPs)
-- **Private Database Subnets**
-  - Amazon RDS MySQL (Single-AZ)
-- One **AWS WAF** shared across both Application Load Balancers
-- No NAT Gateway (cost-optimized design)
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/cde28e5f-09fe-4694-95ae-85784d9a9e6b" />
 
-### Architecture Diagram
-<img width="622" height="388" alt="image" src="https://github.com/user-attachments/assets/0edcd37f-f21e-47a3-901c-2d7b12f5439a" />
 
----
+## Networking
 
-## Compute Layer
-- Two applications
-- Each application runs in an **Auto Scaling Group**
-  - Minimum of **2 EC2 instances** for high availability
-  - Instance type: **t3.large (2 vCPU, 8 GB RAM)**
-- EC2 instances run only in **private subnets**
+* 1 VPC in `eu-central-1`
+* Public Subnet:
+
+  * Application Load Balancer (ALB)
+  * AWS WAF (attached to ALB)
+* Private Application Subnet:
+
+  * Main Application Server
+  * Standby Application Server (same subnet for simplicity)
+* Private Security + Database Subnet:
+
+  * SOC / EDR Server
+  * RDS Subnet Group (4 databases)
+
+No NAT Gateway (cost optimization).
 
 ---
 
-## Database Layer
-- 4 × **Amazon RDS MySQL** databases
-- MySQL version 8.x
-- **Single-AZ** deployment (cost-optimized)
-- Automated backups enabled
-- Databases accessible only from application servers
+# 4. Compute Design
+
+## Main Application Server
+
+* Instance Type: **m6a.xlarge**
+* 4 vCPU / 16 GB RAM
+* Handles primary workload
+
+## Standby Application Server
+
+* Instance Type: **m6a.large**
+* 2 vCPU / 8 GB RAM
+* Same subnet as main server
+* Used if the main server fails
+
+## SOC / EDR Server
+
+* Instance Type: **m6a.large**
+* 2 vCPU / 8 GB RAM
+* Dedicated for monitoring and endpoint security tooling
 
 ---
 
-## Application Server Migration Options
+# 5. Database Layer
 
-### Option 1: Lift-and-Shift (Lightsail → EC2)
-- Export existing Lightsail instance snapshots
-- Convert snapshots to AMIs
-- Launch EC2 instances from the AMIs
+* **4 × Amazon RDS MySQL**
+* MySQL 8.x
+* Single-AZ deployment
+* Automated backups enabled
+* Only accessible from Application Server Security Group
+* SOC/EDR server does NOT connect to databases
 
-**Pros**
-- Faster initial migration
-- Minimal application changes
-
-**Cons**
-- Legacy configurations are preserved
-- Less flexibility for long-term scaling and improvements
+Only application servers have database access.
 
 ---
 
-### Option 2: Rebuild on EC2
-- Deploy applications on clean EC2 instances
-- Install dependencies and redeploy application code
-- Configure Launch Templates and Auto Scaling Groups
+# 6. Security Architecture
 
-**Pros**
-- Cleaner and more secure environment
-- Better long-term maintainability
-- Easier scaling and operations
+## AWS WAF
 
-**Cons**
-- Requires application redeployment and testing
+* Single Web ACL attached to ALB
+* Protects against:
 
-**Note:**  
-The final migration approach should be discussed with the application team based on application complexity, deployment readiness, and acceptable risk.
+  * SQL Injection
+  * XSS
+  * Malicious IPs
+  * Abuse patterns
+
+## Security Groups
+
+* ALB: Allow HTTPS (443) from internet
+* App Servers: Allow traffic only from ALB
+* RDS: Allow MySQL (3306) only from App Server SG
+* SOC/EDR: Restricted internal access
+
+No public IPs assigned to EC2 instances.
+
+---
+
+# 7. Monitoring & Automated Diagnostics
+
+## CloudWatch Monitoring
+
+CloudWatch monitors:
+
+* EC2 CPU usage
+* EC2 Memory usage (via CloudWatch Agent)
+* Disk usage
+* ALB health metrics
+* RDS performance metrics
+
+---
+
+## Automated High Memory / CPU Detection
+
+To detect high resource consumption:
+
+CloudWatch monitors total memory usage →
+If memory exceeds threshold (e.g., 85%) →
+CloudWatch Alarm triggers →
+Alarm invokes AWS Systems Manager (SSM) →
+SSM runs:
+
+ps aux --sort=-%mem | head -n 10
+
+on the EC2 instance →
+Output is stored in CloudWatch Logs for investigation.
+
+This enables automated identification of problematic processes without SSH access.
+
+---
+
+# 8. Secure Access to Instances
+
+## Option 1: AWS Systems Manager (SSM) — Recommended
+
+No SSH. No VPN. No port 22 open.
+
+Engineer connects via AWS Console or CLI →
+SSM creates secure session →
+Direct shell access to private EC2.
+
+✔ No public exposure
+✔ No SSH key management
+✔ Fully audited
+✔ Lower operational complexity
+
+---
+
+## Option 2: AWS Client VPN (If full network access required)
+
+Laptop
+↓ (TLS encrypted)
+AWS Client VPN Endpoint
+↓
+VPC
+↓
+Private EC2 (port 22 allowed from VPN CIDR only)
+
+Security Group Rule:
+Allow SSH (22) from VPN CIDR (e.g., 10.200.0.0/22)
+
+---
+
+# 9. Migration Approach
+
+## EC2 Migration Options
+
+Option 1: Lift-and-shift
+
+* Export Lightsail snapshot
+* Convert to AMI
+* Launch EC2 instance
+
+Option 2: Rebuild on fresh EC2
+
+* Deploy clean instances
+* Install dependencies
+* Deploy application
+* More controlled and secure long-term
+
+Final method to be discussed with application team.
 
 ---
 
 ## Database Migration
-- Databases will be migrated from Lightsail MySQL to Amazon RDS MySQL using **AWS Database Migration Service (DMS)**
-- Full initial data load with ongoing replication
-- Minimal downtime during cutover
-- Same MySQL major version maintained for compatibility
+
+* Lightsail MySQL → Amazon RDS MySQL
+* Use AWS DMS (minimal downtime)
+* Or mysqldump (simple approach)
+* Maintain MySQL version compatibility
 
 ---
 
-## Monitoring & Visibility
-- **Amazon CloudWatch** will be used for monitoring and observability
-- Metrics collected:
-  - EC2 CPU, memory, and disk utilization
-  - Application Load Balancer request count, latency, and error rates
-  - RDS MySQL performance metrics
-- CloudWatch alarms can be configured for:
-  - High CPU or memory usage
-  - Unhealthy load balancer targets
-  - Database performance thresholds
-- This provides visibility into system health without adding significant cost or operational complexity
-## Security Improvements
-- No public EC2 instances
-- Centralized protection using AWS WAF
-- Strict security group rules between ALB, EC2, and RDS
-- Reduced attack surface compared to the current setup
+# 10. Cost Estimation (Frankfurt – On-Demand Pricing)
+
+Based on eu-central-1 On-Demand pricing (730 hours/month):
+
+## EC2
+
+m6a.xlarge = $0.207/hour
+m6a.large = $0.1035/hour
+
+Main Server:
+0.207 × 730 = **$151.11**
+
+Standby Server:
+0.1035 × 730 = **$75.55**
+
+SOC / EDR Server:
+0.1035 × 730 = **$75.55**
+
+EC2 Total:
+**$302.22/month**
 
 ---
 
-## Benefits
-- Improved security posture
-- High availability at the application layer
-- Easy horizontal scaling
-- Better operational control compared to Lightsail
-- Cost-optimized design using a single region and Single-AZ databases
+## EBS (gp3)
+
+gp3 Frankfurt: $0.0952 per GB/month
+
+Assuming ~320 GB total:
+≈ **$30.46/month**
 
 ---
 
-## Estimated Monthly Cost (us-east-1)
+## RDS MySQL (Single-AZ)
 
-<img width="895" height="275" alt="image" src="https://github.com/user-attachments/assets/ed59543e-c5bc-432e-ac41-5418d2cb3a8b" />
+Using db.t3.medium baseline (~$0.084/hour):
 
+0.084 × 730 = $61.32 per DB
 
-| Service | Approximate Cost |
-|------|----------------|
-| EC2 (4 × t3.large) | ~$240 |
-| EBS Storage | ~$40–50 |
-| RDS MySQL (4 × Single-AZ) | ~$320–$400 |
-| Application Load Balancers (2) | ~$30–$50 |
-| AWS WAF (1) | ~$5–$10 |
-| **Estimated Total** | **~$635–$750 / month** |
+4 databases:
+≈ **$245.28/month**
 
-> Costs are based on on-demand pricing in `us-east-1` and may vary depending on usage.
+(RDS storage & backups not included — depends on allocated size.)
 
 ---
 
-## Conclusion
-This migration replaces the existing Lightsail-based infrastructure with a **secure, scalable, and AWS best-practice architecture**, while keeping operational complexity and cost under control. The proposed setup supports current workloads and allows future growth without significant redesign.
+## AWS WAF
+
+Example configuration:
+
+* 1 Web ACL
+* ~10 rules
+* ~10M requests/month
+
+≈ **$20–25/month**
+
+---
+
+## Application Load Balancer
+
+ALB pricing depends on LCU usage and traffic.
+Estimated low-traffic range:
+
+≈ **$25–35/month**
+
+---
+
+# 11. Estimated Total Monthly Cost
+
+EC2: $302.22
+EBS: $30.46
+RDS: $245.28
+WAF: ~$22
+ALB: ~$30
+
+Estimated Total:
+
+≈ **$630 – $670 per month**
+
+(Final cost depends on RDS storage size, backup retention, and actual traffic volume.)
+
+---
+
+# 12. Benefits
+
+* No public EC2 exposure
+* Centralized WAF protection
+* Automated diagnostics via CloudWatch + SSM
+* Secure audited access
+* Clear separation of application and security roles
+* Controlled and predictable cost
+* Increased compute capacity compared to Lightsail
+
+---
+
+# Conclusion
+
+This architecture upgrades the current Lightsail deployment into a secure, production-grade AWS design in Frankfurt.
+It improves security posture, monitoring visibility, and operational control while maintaining cost efficiency and meeting the application owner's performance requirements.
 
 
